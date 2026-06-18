@@ -5,11 +5,44 @@ import { ChatInput } from './ChatInput';
 
 export const ChatWindow: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Start loading while history fetches
 
-  const [threadId] = useState(() => Math.random().toString(36).substring(2, 15));
+  const [threadId] = useState(() => {
+    const saved = localStorage.getItem('chat_thread_id');
+    if (saved) return saved;
+    const newId = Math.random().toString(36).substring(2, 15);
+    localStorage.setItem('chat_thread_id', newId);
+    return newId;
+  });
+
   const [approvalRequest, setApprovalRequest] = useState<{toolName: string, toolArgs: any} | null>(null);
   const currentAiMessageId = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const response = await fetch(`http://localhost:8000/chat/history?thread_id=${threadId}`);
+        const data = await response.json();
+        
+        if (data.messages && data.messages.length > 0) {
+          // Normalize the messages to match our UI format
+          const formattedHistory: Message[] = data.messages.map((msg: any) => ({
+            id: msg.id,
+            role: msg.role,
+            content: msg.content,
+            timestamp: Date.now() // Mock timestamp since backend doesn't store it
+          }));
+          setMessages(formattedHistory);
+        }
+      } catch (error) {
+        console.error("Failed to fetch chat history:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchHistory();
+  }, [threadId]);
 
   const processStream = async (response: Response, aiMessageId: string) => {
     if (!response.body) {

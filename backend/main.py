@@ -5,7 +5,7 @@ from pydantic import BaseModel
 import json
 import asyncio
 
-from app.agent import stream_chat
+from app.agent import stream_chat, get_chat_history
 
 app = FastAPI()
 
@@ -23,6 +23,14 @@ class ChatRequest(BaseModel):
     thread_id: str
     resume: bool = False
     approved: bool = False
+
+@app.get("/chat/history")
+async def fetch_history(thread_id: str):
+    try:
+        history = await get_chat_history(thread_id)
+        return {"messages": history}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.post("/chat/stream")
 async def chat_stream(request: ChatRequest):
