@@ -7,7 +7,7 @@ export const ChatWindow: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSendMessage = (content: string) => {
+  const handleSendMessage = async (content: string) => {
     // Add user message
     const newUserMessage: Message = {
       id: Date.now().toString(),
@@ -19,17 +19,89 @@ export const ChatWindow: React.FC = () => {
     setMessages((prev) => [...prev, newUserMessage]);
     setIsLoading(true);
 
-    // Mock AI response
-    setTimeout(() => {
-      const newAiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'ai',
-        content: `This is a mock response to: "${content}". We will attach this to the real API later!`,
-        timestamp: Date.now(),
-      };
-      setMessages((prev) => [...prev, newAiMessage]);
+    const aiMessageId = (Date.now() + 1).toString();
+    const newAiMessage: Message = {
+      id: aiMessageId,
+      role: 'ai',
+      content: '',
+      timestamp: Date.now(),
+    };
+    
+    setMessages((prev) => [...prev, newAiMessage]);
+
+    try {
+      const response = await fetch('http://localhost:8000/chat/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message: content }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      if (!response.body) {
+        throw new Error('ReadableStream not supported in this browser.');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let done = false;
+
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        
+        if (value) {
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const dataStr = line.replace('data: ', '').trim();
+              if (dataStr) {
+                try {
+                  const data = JSON.parse(dataStr);
+                  
+                  if (data.chunk) {
+                    setMessages((prev) => 
+                      prev.map((msg) => 
+                        msg.id === aiMessageId 
+                          ? { ...msg, content: msg.content + data.chunk } 
+                          : msg
+                      )
+                    );
+                  }
+                  
+                  if (data.done) {
+                    // Stream completed normally
+                  }
+                  
+                  if (data.error) {
+                    console.error('Error from server:', data.error);
+                  }
+                } catch (e) {
+                  console.error('Error parsing SSE JSON:', e);
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching stream:', error);
+      setMessages((prev) => 
+        prev.map((msg) => 
+          msg.id === aiMessageId 
+            ? { ...msg, content: msg.content + "\n\n**Error:** Could not connect to the backend API." } 
+            : msg
+        )
+      );
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   return (
