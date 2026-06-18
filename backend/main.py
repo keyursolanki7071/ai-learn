@@ -20,15 +20,18 @@ app.add_middleware(
 
 class ChatRequest(BaseModel):
     message: str
+    thread_id: str
+    resume: bool = False
+    approved: bool = False
 
 @app.post("/chat/stream")
 async def chat_stream(request: ChatRequest):
     async def event_generator():
         # Using Server-Sent Events (SSE) format
         try:
-            async for chunk in stream_chat(request.message):
-                # Send each chunk as an SSE data payload
-                yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+            async for chunk_json in stream_chat(request.message, request.thread_id, request.resume, request.approved):
+                # We yield the already JSON stringified chunks from agent.py
+                yield f"data: {chunk_json}\n\n"
             # Signal the end of the stream
             yield f"data: {json.dumps({'done': True})}\n\n"
         except Exception as e:
