@@ -1,8 +1,0 @@
-fastapi
-uvicorn
-langgraph
-langchain-openai
-pydantic
-python-dotenv
-sse-starlette
-langgraph-checkpoint-sqlite
