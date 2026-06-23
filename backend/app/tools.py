@@ -1,5 +1,8 @@
 from langchain_core.tools import tool
 
+from app.core.logger import get_logger
+
+log = get_logger("tools")
 
 @tool
 def send_email(email_address: str, subject: str, body: str) -> str:
@@ -22,6 +25,6 @@ def send_email(email_address: str, subject: str, body: str) -> str:
         A confirmation message indicating the email was sent.
     """
     # In a real app, this would integrate with SMTP, SendGrid, Resend, etc.
-    print(f"DEBUG: Sending email to {email_address}\nSubject: {subject}\nBody: {body}")
+    log.info(f"DEBUG: Sending email to {email_address}\nSubject: {subject}\nBody: {body}")
 
     return "Email sent successfully"

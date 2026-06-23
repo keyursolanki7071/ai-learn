@@ -7,8 +7,12 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
+from app.core.logger import get_logger
+
 # Load environment variables
 load_dotenv()
+
+log = get_logger("structured_retry")
 
 
 # ==========================================
@@ -44,7 +48,7 @@ def extract_node(state: State):
     """
     This node asks the LLM to extract the data into our schema.
     """
-    print(f"\n--- [Node: Extract] (Attempt {state.get('retry_count', 0) + 1}) ---")
+    log.info(f"\n--- [Node: Extract] (Attempt {state.get('retry_count', 0) + 1}) ---")
 
     # We pass the entire conversation history to the LLM.
     # This includes the original text, plus any validation errors from previous loops!
@@ -59,13 +63,13 @@ def validate_node(state: State):
     This node checks if the extracted profile meets our strict business rules.
     If it fails, we increment the retry count and append an error message.
     """
-    print("\n--- [Node: Validate] ---")
+    log.info("\n--- [Node: Validate] ---")
     profile = state["profile"]
 
     # Our Business Rule: The user must be 18 or older.
     if profile.age < 18:
         error_msg = f"Validation Error: You extracted age {profile.age}. The user must be 18 or older. Please carefully read the text and find their true adult age, or infer it if necessary."
-        print(f"Validation FAILED: {error_msg}")
+        log.info(f"Validation FAILED: {error_msg}")
 
         return {
             "retry_count": state.get("retry_count", 0) + 1,
@@ -73,7 +77,7 @@ def validate_node(state: State):
             "messages": [HumanMessage(content=error_msg)],
         }
 
-    print("Validation PASSED!")
+    log.info("Validation PASSED!")
     return {"retry_count": state.get("retry_count", 0)}
 
 
@@ -91,10 +95,10 @@ def route_after_validation(state: State):
 
     # If validation failed, check if we've hit the max retries
     if state.get("retry_count", 0) >= 3:
-        print("\n--- [Router] Max retries reached. Giving up. ---")
+        log.info("\n--- [Router] Max retries reached. Giving up. ---")
         return END
 
-    print("\n--- [Router] Looping back to Extract... ---")
+    log.info("\n--- [Router] Looping back to Extract... ---")
     return "extract"
 
 
@@ -117,9 +121,9 @@ graph = graph_builder.compile()
 # 6. Test the Graph
 # ==========================================
 def run_test():
-    print("=" * 50)
-    print("TESTING STRUCTURED OUTPUT & AUTO-RETRY")
-    print("=" * 50)
+    log.info("=" * 50)
+    log.info("TESTING STRUCTURED OUTPUT & AUTO-RETRY")
+    log.info("=" * 50)
 
     # Test 1: The messy text contains a trick. The person is 15 but turning 20?
     # Let's see if the LLM falls for it, and if our retry loop catches it.
@@ -140,20 +144,20 @@ def run_test():
         "retry_count": 0,
     }
 
-    print("\n[Input Text]:")
-    print(messy_text.strip())
+    log.info("\n[Input Text]:")
+    log.info(messy_text.strip())
 
     # Run the graph
     result = graph.invoke(inputs)
 
-    print("\n" + "=" * 50)
-    print("FINAL RESULT:")
+    log.info("\n" + "=" * 50)
+    log.info("FINAL RESULT:")
     if result.get("profile"):
-        print(f"Name: {result['profile'].first_name} {result['profile'].last_name}")
-        print(f"Age: {result['profile'].age}")
+        log.info(f"Name: {result['profile'].first_name} {result['profile'].last_name}")
+        log.info(f"Age: {result['profile'].age}")
     else:
-        print("Failed to extract a valid profile.")
-    print("=" * 50)
+        log.info("Failed to extract a valid profile.")
+    log.info("=" * 50)
 
 
 if __name__ == "__main__":

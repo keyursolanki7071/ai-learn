@@ -14,3 +14,5 @@ checkpoints.sqlite
 checkpoints.sqlite*
 
 .agents/
+# Application logs
+backend/logs/
